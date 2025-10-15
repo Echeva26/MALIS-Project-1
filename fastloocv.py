@@ -1,5 +1,6 @@
 import time
 import numpy as np
+from sklearn.neighbors import KNeighborsRegressor
 
 
 class FastLOOCV:
@@ -44,14 +45,50 @@ class FastLOOCV:
         """
         start_time = time.time()
 
-        # Placeholder: here you would implement the fast LOOCV procedure.
-        # For now, just simulate scores with dummy values.
-        score = np.zeros(len(k_values))
+        # Get features (X) and target values (y) from the data
+        X, y = self.data
 
-        # Your code here
+        # If sample_size is specified and smaller than the dataset,
+        # select a subset of the data
+        if sample_size and sample_size < len(X):
+            # For replication purposes, we take the first n samples
+            # In a real scenario, you might want to use random sampling
+            X_sample, y_sample = X[:sample_size], y[:sample_size]
+        else:
+            X_sample, y_sample = X, y
+        
+        scores = []
+
+        # Iterate through each k value to evaluate
+        for k in k_values:
+            # Handle edge case: k=0 would cause division by zero
+            if k == 0:
+                scores.append(np.inf)
+                continue
+
+            # Step 1: Train a (k+1)-NN regressor using all sample data
+            # Using kd_tree algorithm for efficient nearest neighbor search
+            model_k_plus_1 = KNeighborsRegressor(n_neighbors=k + 1, algorithm='kd_tree')
+            model_k_plus_1.fit(X_sample, y_sample)
+            
+            # Step 2: Make predictions on the training data
+            # These predictions will be used to estimate LOOCV error
+            y_pred = model_k_plus_1.predict(X_sample)
+            
+            # Step 3: Calculate Mean Squared Error (MSE) on training data
+            # This is the raw error before applying the LOOCV scaling factor
+            mse_train = np.mean((y_sample - y_pred) ** 2)
+            
+            # Step 4: Apply scaling factor to get LOOCV score
+            # The ((k+1)/k)^2 factor adjusts for the bias in training error
+            # This gives us an estimate of true LOOCV error without running n models
+            scaling_factor = ((k + 1) / k) ** 2
+            loocv_score = mse_train * scaling_factor
+            
+            scores.append(loocv_score)
 
         elapsed_time = time.time() - start_time
-        return score, elapsed_time
+        return np.array(scores), elapsed_time
         
     def do_normal_loocv(self, k_values, sample_size=None):
         """

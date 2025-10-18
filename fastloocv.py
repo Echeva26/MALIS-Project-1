@@ -86,7 +86,6 @@ class FastLOOCV:
             loocv_score = mse_train * scaling_factor
             
             scores.append(loocv_score)
-
         elapsed_time = time.time() - start_time
         return np.array(scores), elapsed_time
         
@@ -112,10 +111,51 @@ class FastLOOCV:
         start_time = time.time()
 
         # Placeholder: here you would implement the fast LOOCV procedure.
-        # For now, just simulate scores with dummy values.
-        score = np.zeros(len(k_values))
+        # Get features and targets from the data
+        X, y = self.data
 
-        # Your code here
+        # Handle sample_size if specified
+        if sample_size and sample_size < len(X):
+            X_sample, y_sample = X[:sample_size], y[:sample_size]
+        else:
+            X_sample, y_sample = X, y
+        
+        n = len(X_sample)
+        # Initialize score array
+        scores = []
+        # Iterate through each k value to evaluat
+        for k in k_values:
+            # Handle edge case: k=0 would cause division by zero
+            if k == 0:
+                scores.append(np.inf)
+                continue
+
+            mse_loocv = 0.0
+            # Perform LOOCV
+            for i in range(n):
+                # Create training set excluding the i-th sample
+                X_train = np.delete(X_sample, i, axis=0)
+                y_train = np.delete(y_sample, i, axis=0)
+
+                # Create test set with the i-th sample
+                X_test = X_sample[i].reshape(1, -1)
+                y_test = y_sample[i]
+
+                # Train k-NN regressor
+                model = KNeighborsRegressor(n_neighbors=k, algorithm='kd_tree')
+                model.fit(X_train, y_train)
+
+                # Predict the left-out sample
+                y_pred = model.predict(X_test)
+
+                # Accumulate squared error
+                mse_loocv += (y_test - y_pred) ** 2
+
+            # Average MSE over all samples
+            mse_loocv /= n
+            scores.append(mse_loocv)
+
+        score = np.array(scores)
 
         elapsed_time = time.time() - start_time
         return score, elapsed_time

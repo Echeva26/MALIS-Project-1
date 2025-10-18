@@ -110,52 +110,58 @@ class FastLOOCV:
         """
         start_time = time.time()
 
-        # Placeholder: here you would implement the fast LOOCV procedure.
-        # Get features and targets from the data
+        # Get features (X) and target values (y) from the data
         X, y = self.data
 
-        # Handle sample_size if specified
+        # If sample_size is specified and smaller than the dataset,
+        # select a subset of the data
         if sample_size and sample_size < len(X):
+            # For replication purposes, we take the first n samples
             X_sample, y_sample = X[:sample_size], y[:sample_size]
         else:
             X_sample, y_sample = X, y
         
         n = len(X_sample)
-        # Initialize score array
         scores = []
-        # Iterate through each k value to evaluat
+
+        # Iterate through each k value to evaluate
         for k in k_values:
             # Handle edge case: k=0 would cause division by zero
             if k == 0:
                 scores.append(np.inf)
                 continue
-
-            mse_loocv = 0.0
-            # Perform LOOCV
+            
+            # This will accumulate the squared errors for each of the n iterations
+            error_accumulator = 0.0
+            
+            # This is the main "brute-force" LOOCV loop
+            # It runs n times (once for each sample)
             for i in range(n):
-                # Create training set excluding the i-th sample
+                
+                # Step 1 (per sample): Create training set by excluding sample 'i'
                 X_train = np.delete(X_sample, i, axis=0)
                 y_train = np.delete(y_sample, i, axis=0)
 
-                # Create test set with the i-th sample
+                # Step 2 (per sample): Create test set using only sample 'i'
                 X_test = X_sample[i].reshape(1, -1)
                 y_test = y_sample[i]
 
-                # Train k-NN regressor
+                # Step 3 (per sample): Train a k-NN regressor (using k, not k+1)
+                # This model is trained on n-1 samples
                 model = KNeighborsRegressor(n_neighbors=k, algorithm='kd_tree')
                 model.fit(X_train, y_train)
 
-                # Predict the left-out sample
+                # Step 4 (per sample): Predict the single left-out sample
                 y_pred = model.predict(X_test)
 
-                # Accumulate squared error
-                mse_loocv += (y_test - y_pred) ** 2
+                # Step 5 (per sample): Accumulate the squared error
+                # We use y_pred[0] to get the scalar prediction value
+                error_accumulator += (y_test - y_pred[0]) ** 2
 
-            # Average MSE over all samples
-            mse_loocv /= n
-            scores.append(mse_loocv)
-
-        score = np.array(scores)
+            # Step 6 (per k): Calculate the final LOOCV score for this 'k'
+            # This is the Mean Squared Error over all n predictions
+            loocv_score = error_accumulator / n
+            scores.append(loocv_score) 
 
         elapsed_time = time.time() - start_time
-        return score, elapsed_time
+        return np.array(scores), elapsed_time
